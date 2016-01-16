@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Template10.Services.NavigationService;
+using Template10.Utils;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation.Metadata;
@@ -17,8 +19,26 @@ namespace Template10.Common
     {
         #region dependency injection
 
-        public virtual T Resolve<T>(Type type) => default(T);
+        /// <summary>       
+        /// A developer implements this method to return not any type and would need to 
+        /// switch on the type param, returnig the correctly inflated type.
+        /// </summary>
+        /// <remarks>
+        /// There are two popular approaches to view-model dependency injection. The first is this approach, 
+        /// where a Resolve method exists for the developer to implement. The second is a view-model locator
+        /// which puts the injection logic in the form of a property. Both are equally valid.
+        /// </remarks>
+        public virtual T Resolve<T>(Type type)
+        {
+            DebugWrite("Default");
 
+            return default(T);
+        }
+
+        /// <summary>
+        /// If a developer overrides this method, and leaves the DataContext of a page null, then BootStrapper
+        /// will atttempt to fill the DataContext the return value of this method. 
+        /// </summary>
         public virtual Services.NavigationService.INavigable ResolveForPage(Type page, NavigationService navigationService) => null;
 
         #endregion
@@ -27,24 +47,44 @@ namespace Template10.Common
 
         public StateItems SessionState { get; set; } = new StateItems();
 
+        #region Debug
+
+        static void DebugWrite(string text = null, Services.LoggingService.Severities severity = Services.LoggingService.Severities.Trace, [CallerMemberName]string caller = null) =>
+            Services.LoggingService.LoggingService.WriteLine(text, severity, caller: $"BootStrapper.{caller}");
+
+        #endregion
+
         protected BootStrapper()
         {
+            DebugWrite(caller: "Constructor");
+
             Current = this;
-            Resuming += (s, e) => { OnResuming(s, e); };
+
+            Resuming += (s, e) =>
+            {
+                DebugWrite(caller: "Resuming");
+
+                OnResuming(s, e, ApplicationExecutionState.Suspended);
+            };
+
             Suspending += async (s, e) =>
             {
+                DebugWrite(caller: "Suspending");
+
                 // one, global deferral
                 var deferral = e.SuspendingOperation.GetDeferral();
                 try
                 {
-                    foreach (var service in WindowWrapper.ActiveWrappers.SelectMany(x => x.NavigationServices))
+                    foreach (var nav in WindowWrapper.ActiveWrappers.SelectMany(x => x.NavigationServices))
                     {
                         // date the cache (which marks the date/time it was suspended)
-                        service.FrameFacade.SetFrameState(CacheDateKey, DateTime.Now.ToString());
+                        nav.FrameFacade.SetFrameState(CacheDateKey, DateTime.Now.ToString());
                         // call view model suspend (OnNavigatedfrom)
-                        await service.SuspendingAsync();
+                        DebugWrite($"Nav:{nav}", caller: "Nav.SuspendingAsync");
+                        await nav.SuspendingAsync();
                     }
                     // call system-level suspend
+                    DebugWrite("Calling", caller: "OnSuspendingAsync");
                     await OnSuspendingAsync(s, e);
                 }
                 catch { }
@@ -54,7 +94,7 @@ namespace Template10.Common
 
         #region properties
 
-        public Services.NavigationService.INavigationService NavigationService => WindowWrapper.Current().NavigationServices.First();
+        public INavigationService NavigationService => WindowWrapper.Current().NavigationServices.FirstOrDefault();
 
         /// <summary>
         /// The SplashFactory is a Func that returns an instantiated Splash view.
@@ -92,7 +132,7 @@ namespace Template10.Common
         protected override sealed async void OnSearchActivated(SearchActivatedEventArgs args) { await InternalActivatedAsync(args); }
         protected override sealed async void OnShareTargetActivated(ShareTargetActivatedEventArgs args) { await InternalActivatedAsync(args); }
 
-        IActivatedEventArgs OriginalActivatedArgs;
+        public IActivatedEventArgs OriginalActivatedArgs { get; private set; }
 
         /// <summary>
         /// This handles all the prelimimary stuff unique to Activated before calling OnStartAsync()
@@ -101,15 +141,19 @@ namespace Template10.Common
         /// </summary>
         private async Task InternalActivatedAsync(IActivatedEventArgs e)
         {
+            DebugWrite();
+
             OriginalActivatedArgs = e;
 
             // sometimes activate requires a frame to be built
             if (Window.Current.Content == null)
             {
+                DebugWrite("Calling", caller: "InitializeFrameAsync");
                 await InitializeFrameAsync(e);
             }
 
             // onstart is shared with activate and launch
+            DebugWrite("Calling", caller: "OnStartAsync");
             await OnStartAsync(StartKind.Activate, e);
 
             // ensure active (this will hide any custom splashscreen)
@@ -121,6 +165,8 @@ namespace Template10.Common
         public event EventHandler<WindowCreatedEventArgs> WindowCreated;
         protected sealed override void OnWindowCreated(WindowCreatedEventArgs args)
         {
+            DebugWrite();
+
             var window = new WindowWrapper(args.Window);
             WindowCreated?.Invoke(this, args);
             base.OnWindowCreated(args);
@@ -139,17 +185,24 @@ namespace Template10.Common
         /// </summary>
         private async void InternalLaunchAsync(ILaunchActivatedEventArgs e)
         {
+            DebugWrite($"Previous:{e.PreviousExecutionState.ToString()}");
+
+            OriginalActivatedArgs = e;
+
             if (e.PreviousExecutionState != ApplicationExecutionState.Running)
             {
                 await InitializeFrameAsync(e);
             }
 
             // okay, now handle launch
+            bool restored = false;
             switch (e.PreviousExecutionState)
             {
-                //case ApplicationExecutionState.ClosedByUser:
+                case ApplicationExecutionState.Suspended:
                 case ApplicationExecutionState.Terminated:
                     {
+                        OnResuming(this, null, ApplicationExecutionState.Terminated);
+
                         /*
                             Restore state if you need to/can do.
                             Remember that only the primary tile should restore.
@@ -163,35 +216,34 @@ namespace Template10.Common
 
                         if (DetermineStartCause(e) == AdditionalKinds.Primary)
                         {
-                            var restored = NavigationService.RestoreSavedNavigation();
-                            if (!restored)
-                            {
-                                await OnStartAsync(StartKind.Launch, e);
-                            }
-                        }
-                        else
-                        {
-                            await OnStartAsync(StartKind.Launch, e);
+                            restored = NavigationService.RestoreSavedNavigation();
+                            DebugWrite($"Restored:{restored}", caller: "Nav.Restored");
                         }
                         break;
                     }
                 case ApplicationExecutionState.ClosedByUser:
                 case ApplicationExecutionState.NotRunning:
-                    await OnStartAsync(StartKind.Launch, e);
-                    break;
                 default:
-                    await OnStartAsync(StartKind.Launch, e);
                     break;
             }
+
+            if (!restored)
+            {
+                DebugWrite("Calling", caller: "OnStartAsync");
+                await OnStartAsync(StartKind.Launch, e);
+            }
+
             SubscribeBackButton();
 
             // ensure active (this will hide any custom splashscreen)
             Window.Current.Activate();
 
             // Hook up keyboard and mouse Back handler
-            var keyboard = new Services.KeyboardService.KeyboardService();
+            var keyboard = Services.KeyboardService.KeyboardService.Instance;
             keyboard.AfterBackGesture = () =>
             {
+                DebugWrite();
+
                 //the result is no matter
                 var handled = false;
                 RaiseBackRequested(ref handled);
@@ -203,6 +255,8 @@ namespace Template10.Common
 
         private void SubscribeBackButton()
         {
+            DebugWrite();
+
             // Hook up the default Back handler
             SystemNavigationManager.GetForCurrentView().BackRequested -= BackHandler;
             SystemNavigationManager.GetForCurrentView().BackRequested += BackHandler;
@@ -210,17 +264,19 @@ namespace Template10.Common
 
         private void BackHandler(object sender, BackRequestedEventArgs args)
         {
+            DebugWrite();
+
             var handled = false;
             if (ApiInformation.IsApiContractPresent("Windows.Phone.PhoneContract", 1, 0))
             {
-                if (NavigationService.CanGoBack)
+                if (NavigationService?.CanGoBack == true)
                 {
                     handled = true;
                 }
             }
             else
             {
-                handled = !NavigationService.CanGoBack;
+                handled = (NavigationService?.CanGoBack == false);
             }
 
             RaiseBackRequested(ref handled);
@@ -237,6 +293,8 @@ namespace Template10.Common
         /// </summary>
         private void RaiseBackRequested(ref bool handled)
         {
+            DebugWrite();
+
             var args = new HandledEventArgs();
             BackRequested?.Invoke(null, args);
             if (handled = args.Handled)
@@ -255,6 +313,8 @@ namespace Template10.Common
 
         private void RaiseForwardRequested()
         {
+            DebugWrite();
+
             var args = new HandledEventArgs();
             ForwardRequested?.Invoke(null, args);
             if (args.Handled)
@@ -287,9 +347,11 @@ namespace Template10.Common
         /// OnInitializeAsync will be called even if the application is restoring from state.
         /// An app restores from state when the app was suspended and then terminated (PreviousExecutionState terminated).
         /// </summary>
-        public virtual async Task OnInitializeAsync(IActivatedEventArgs args)
+        public virtual Task OnInitializeAsync(IActivatedEventArgs args)
         {
-            await Task.CompletedTask;
+            DebugWrite("Virtual");
+
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -300,13 +362,17 @@ namespace Template10.Common
         /// because the asunc operations are in a single, global deferral created when the suspension
         /// begins and completed automatically when the last viewmodel has been called (including this method).
         /// </summary>
-        public virtual async Task OnSuspendingAsync(object s, SuspendingEventArgs e)
+        public virtual Task OnSuspendingAsync(object s, SuspendingEventArgs e)
         {
-            await Task.CompletedTask;
-            (await Windows.Devices.Lights.Lamp.GetDefaultAsync()).IsEnabled = true;
+            DebugWrite("Virtual");
+
+            return Task.CompletedTask;
         }
 
-        public virtual void OnResuming(object s, object e) { }
+        public virtual void OnResuming(object s, object e, ApplicationExecutionState previousExecutionState)
+        {
+            DebugWrite($"Virtual, PreviousExecutionState:{previousExecutionState}");
+        }
 
         #endregion
 
@@ -317,9 +383,11 @@ namespace Template10.Common
         /// </summary>
         private async Task InitializeFrameAsync(IActivatedEventArgs e)
         {
+            DebugWrite($"IActivatedEventArgs:{e}");
+
             // first show the splash 
             FrameworkElement splash = null;
-            if (SplashFactory != null)
+            if (SplashFactory != null && e.PreviousExecutionState != ApplicationExecutionState.Suspended)
             {
                 Window.Current.Content = splash = SplashFactory(e.SplashScreen);
                 Window.Current.Activate();
@@ -328,6 +396,9 @@ namespace Template10.Common
             // allow the user to do things, even when restoring
             await OnInitializeAsync(e);
 
+            // this "unused" bit is very important because of a quirk in ResourceThemes
+            var unused = Application.Current.Resources["ExtendedSplashBackground"];
+            
             // setup custom titlebar
             foreach (var resource in Application.Current.Resources
                 .Where(x => x.Key.Equals(typeof(Controls.CustomTitleBar))))
@@ -348,6 +419,8 @@ namespace Template10.Common
 
         protected virtual Frame CreateRootFrame(IActivatedEventArgs e)
         {
+            DebugWrite($"IActivatedEventArgs:{e}");
+
             return new Frame();
         }
 
@@ -361,16 +434,20 @@ namespace Template10.Common
         /// A developer should call this when creating a new/secondary frame.
         /// The shell back button should only be setup one time.
         /// </summary>
-        public Services.NavigationService.INavigationService NavigationServiceFactory(BackButton backButton, ExistingContent existingContent)
+        public INavigationService NavigationServiceFactory(BackButton backButton, ExistingContent existingContent)
         {
+            DebugWrite($"BackButton:{backButton} ExistingContent:{existingContent}");
+
             return NavigationServiceFactory(backButton, existingContent, new Frame());
         }
 
         /// <summary>
         /// Creates the NavigationService instance for given Frame.
         /// </summary>
-        protected virtual Services.NavigationService.INavigationService CreateNavigationService(Frame frame)
+        protected virtual INavigationService CreateNavigationService(Frame frame)
         {
+            DebugWrite($"Frame:{frame}");
+
             return new Services.NavigationService.NavigationService(frame);
         }
 
@@ -381,8 +458,12 @@ namespace Template10.Common
         /// A developer should call this when creating a new/secondary frame.
         /// The shell back button should only be setup one time.
         /// </summary>
-        public Services.NavigationService.INavigationService NavigationServiceFactory(BackButton backButton, ExistingContent existingContent, Frame frame)
+        public INavigationService NavigationServiceFactory(BackButton backButton, ExistingContent existingContent, Frame frame)
         {
+            DebugWrite($"BackButton:{backButton} ExistingContent:{existingContent} Frame:{frame}");
+
+            frame.Content = (existingContent == ExistingContent.Include) ? Window.Current.Content : null;
+
             // if the service already exists for this frame, use the existing one.
             foreach (var nav in WindowWrapper.ActiveWrappers.SelectMany(x => x.NavigationServices))
             {
@@ -437,6 +518,8 @@ namespace Template10.Common
         public bool ForceShowShellBackButton { get; set; } = false;
         public void UpdateShellBackButton()
         {
+            DebugWrite();
+
             // show the shell back only if there is anywhere to go in the default frame
             SystemNavigationManager.GetForCurrentView().AppViewBackButtonVisibility =
                 (ShowShellBackButton && (NavigationService.Frame.CanGoBack || ForceShowShellBackButton))
@@ -452,6 +535,8 @@ namespace Template10.Common
         /// </summary>
         public static AdditionalKinds DetermineStartCause(IActivatedEventArgs args)
         {
+            DebugWrite($"IActivatedEventArgs:{args}");
+
             if (args is ToastNotificationActivatedEventArgs)
                 return AdditionalKinds.Toast;
             var e = args as ILaunchActivatedEventArgs;

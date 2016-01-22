@@ -134,6 +134,7 @@
     <Compile Include="Behaviors\MessageDialogAction.cs" />
     <Compile Include="Behaviors\NavButtonBehavior.cs" />
     <Compile Include="Behaviors\EllipsisBehavior.cs" />
+    <Compile Include="Behaviors\NavToPageAction.cs" />
     <Compile Include="Behaviors\OpenFlyoutAction.cs" />
     <Compile Include="Behaviors\TextBoxEnterKeyBehavior.cs" />
     <Compile Include="Behaviors\ConditionalAction.cs" />
@@ -163,11 +164,15 @@
     <Compile Include="Converters\StringFormatConverter.cs" />
     <Compile Include="Mvvm\AwaitableDelegateCommand.cs" />
     <Compile Include="Common\WeakReference.cs" />
+    <Compile Include="Mvvm\DependencyBindableBase.cs" />
     <Compile Include="Services\LoggingService\LoggingService.cs" />
     <Compile Include="Services\NavigationService\AlternativeNavigationEventArgs.cs" />
     <Compile Include="Services\NavigationService\INavigationService.cs" />
     <Compile Include="Services\NavigationService\JournalEntry.cs" />
     <Compile Include="Services\NavigationService\NavigationServiceList.cs" />
+    <Compile Include="Services\SerializationService\ISerializationService.cs" />
+    <Compile Include="Services\SerializationService\JsonSerializationService.cs" />
+    <Compile Include="Services\SerializationService\SerializationService.cs" />
     <Compile Include="Services\SettingsService\IPropertyMapping.cs" />
     <Compile Include="Services\SettingsService\ISettingsHelper.cs" />
     <Compile Include="Services\SettingsService\ISettingsService.cs" />
@@ -184,7 +189,7 @@
     <Compile Include="Utils\InkUtils.cs" />
     <Compile Include="Utils\LinqUtils.cs" />
     <Compile Include="Utils\MonitorUtils.cs" />
-    <Compile Include="Utils\ObservableCollectionUtils.cs" />
+    <Compile Include="Utils\IEnumerableUtils.cs" />
     <Compile Include="Utils\ResourceUtils.cs" />
     <Compile Include="Utils\TaskUtils.cs" />
     <Compile Include="Utils\Template10Utils.cs" />
@@ -253,7 +258,8 @@
     </PreBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
-    <PostBuildEvent>call "$(ProjectDir)\Nuget\Build.cmd" "$(TargetDir)" "$(TargetName)" "$(ProjectDir)"</PostBuildEvent>
+    <PostBuildEvent>call "$(ProjectDir)\Nuget\Build.cmd" "$(TargetDir)" "$(TargetName)" "$(ProjectDir)"
+call "$(SolutionDir)\Snippets\InstallSnippets.cmd"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

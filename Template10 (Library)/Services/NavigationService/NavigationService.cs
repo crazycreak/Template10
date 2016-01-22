@@ -9,9 +9,9 @@ using Windows.ApplicationModel.Core;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
+using Template10.Services.SerializationService;
 
 namespace Template10.Services.NavigationService
 {
@@ -37,7 +37,9 @@ namespace Template10.Services.NavigationService
 
         protected internal NavigationService(Frame frame)
         {
-            FrameFacade = new FrameFacade(frame);
+            SerializationService = global::Template10.Services.SerializationService.SerializationService.Json;
+
+            FrameFacade = new FrameFacade(this, frame);
             FrameFacade.Navigating += async (s, e) =>
             {
                 if (e.Suspending)
@@ -52,7 +54,8 @@ namespace Template10.Services.NavigationService
             };
             FrameFacade.Navigated += async (s, e) =>
             {
-                await WindowWrapper.Current().Dispatcher.DispatchAsync(() => { NavigateTo(e.NavigationMode, e.Parameter, Frame.Content); }, 1);
+                var parameter = SerializationService.Deserialize(e.Parameter?.ToString());
+                await WindowWrapper.Current().Dispatcher.DispatchAsync(() => { NavigateTo(e.NavigationMode, parameter, Frame.Content); }, 1);
             };
         }
 
@@ -188,6 +191,7 @@ namespace Template10.Services.NavigationService
                     return false;
             }
 
+            parameter = SerializationService.Serialize(parameter);
             return FrameFacade.Navigate(page, parameter, infoOverride);
         }
 
@@ -220,14 +224,25 @@ namespace Template10.Services.NavigationService
             DebugWrite($"Key: {key}, Parameter: {parameter}, NavigationTransitionInfo: {infoOverride}");
 
             var keys = Common.BootStrapper.Current.PageKeys<T>();
+
             if (!keys.ContainsKey(key))
                 throw new KeyNotFoundException(key.ToString());
+
             var page = keys[key];
-            if (page.FullName.Equals(LastNavigationType)
-                && parameter == LastNavigationParameter)
-                return false;
+
+            if (page.FullName.Equals(LastNavigationType))
+            {
+                if (parameter == LastNavigationParameter)
+                    return false;
+
+                if (parameter != null && parameter.Equals(LastNavigationParameter))
+                    return false;
+            }
+
             return FrameFacade.Navigate(page, parameter, infoOverride);
         }
+
+        public ISerializationService SerializationService { get; set; }
 
         public event EventHandler<CancelEventArgs<Type>> BeforeSavingNavigation;
         public void SaveNavigation()

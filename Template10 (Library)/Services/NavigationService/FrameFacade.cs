@@ -2,19 +2,20 @@
 using System.Collections.Generic;
 using Template10.Common;
 using Template10.Services.SettingsService;
-using Windows.Foundation.Collections;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Navigation;
+using Template10.Services.SerializationService;
 
 namespace Template10.Services.NavigationService
 {
     // DOCS: https://github.com/Windows-XAML/Template10/wiki/Docs-%7C-NavigationService
     public class FrameFacade
     {
-        internal FrameFacade(Frame frame)
+        internal FrameFacade(NavigationService navigationService, Frame frame)
         {
+            NavigationService = navigationService;
             Frame = frame;
             frame.Navigated += (s, e) => FacadeNavigatedEventHandler(s, e);
             frame.Navigating += (s, e) => FacadeNavigatingCancelEventHandler(s, e);
@@ -99,6 +100,8 @@ namespace Template10.Services.NavigationService
 
         public string FrameId { get; set; } = string.Empty;
 
+        internal NavigationService NavigationService { get; set; }
+
         public bool Navigate(Type page, object parameter, NavigationTransitionInfo infoOverride)
         {
             if (Frame.Navigate(page, parameter, infoOverride))
@@ -110,6 +113,8 @@ namespace Template10.Services.NavigationService
                 return false;
             }
         }
+
+        internal ISerializationService SerializationService => NavigationService.SerializationService;
 
         public void SetNavigationState(string state) { Frame.SetNavigationState(state); }
 
@@ -189,7 +194,7 @@ namespace Template10.Services.NavigationService
         void FacadeNavigatedEventHandler(object sender, Windows.UI.Xaml.Navigation.NavigationEventArgs e)
         {
             CurrentPageType = e.SourcePageType;
-            CurrentPageParam = e.Parameter;
+            CurrentPageParam = SerializationService.Deserialize(e.Parameter?.ToString());
             var args = new NavigatedEventArgs(e, Content as Page);
             if (NavigationModeHint != NavigationMode.New)
                 args.NavigationMode = NavigationModeHint;
@@ -208,7 +213,8 @@ namespace Template10.Services.NavigationService
         }
         private void FacadeNavigatingCancelEventHandler(object sender, NavigatingCancelEventArgs e)
         {
-            var args = new NavigatingEventArgs(e, Content as Page);
+            var parameter = SerializationService.Deserialize(e.Parameter?.ToString());
+            var args = new NavigatingEventArgs(e, Content as Page, parameter);
             if (NavigationModeHint != NavigationMode.New)
                 args.NavigationMode = NavigationModeHint;
             NavigationModeHint = NavigationMode.New;

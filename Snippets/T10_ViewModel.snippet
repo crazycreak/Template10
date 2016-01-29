@@ -6,7 +6,7 @@
         <SnippetType>Expansion</SnippetType>
       </SnippetTypes>
       <Title>ViewModel class</Title>
-      <Author>jerry@nixoncorp.com</Author>
+      <Author>Jerry Nixon</Author>
       <Shortcut>T10_ViewModel</Shortcut>
     </Header>
     <Snippet>
@@ -66,7 +66,7 @@
               typeof(Windows.UI.Colors).GetRuntimeProperties()
                   .Select(x => new { Name = x.Name, Color = (Color)x.GetValue(null) });
          
-          public override void OnNavigatedTo(object parameter, NavigationMode mode, IDictionary<string, object> state)
+          public override Task OnNavigatedToAsync(object parameter, NavigationMode mode, IDictionary<string, object> state)
           {
               if (state.Any())
               {
@@ -77,6 +77,7 @@
               {
                   // use parameter
               }
+              return Task.CompletedTask;
           }
 
           public override Task OnNavigatedFromAsync(IDictionary<string, object> state, bool suspending)
@@ -88,8 +89,11 @@
               return Task.CompletedTask;
           }
 
-          public override void OnNavigatingFrom(NavigatingEventArgs args) =>
+          public override Task OnNavigatingFromAsync(NavigatingEventArgs args)
+          {
               args.Cancel = false;
+              return Task.CompletedTask;
+          }
         }]]>
       </Code>
     </Snippet>

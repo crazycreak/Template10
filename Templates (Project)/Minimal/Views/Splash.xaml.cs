@@ -1,4 +1,5 @@
 ﻿using System;
+using Template10.Utils;
 using Windows.ApplicationModel.Activation;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -10,7 +11,7 @@ namespace Sample.Views
     {
         public Splash(SplashScreen splashScreen)
         {
-            this.InitializeComponent();
+            InitializeComponent();
 
             Action resize = () =>
             {

@@ -139,6 +139,7 @@
     <Compile Include="Behaviors\TextBoxEnterKeyBehavior.cs" />
     <Compile Include="Behaviors\ConditionalAction.cs" />
     <Compile Include="Behaviors\TimeoutAction.cs" />
+    <Compile Include="Behaviors\UpdateSourceTriggerBehavior.cs" />
     <Compile Include="Common\BootStrapper.cs" />
     <Compile Include="Common\DispatcherWrapper.cs" />
     <Compile Include="Common\HandledEventArgs.cs" />
@@ -168,7 +169,6 @@
     <Compile Include="Services\LoggingService\LoggingService.cs" />
     <Compile Include="Services\NavigationService\AlternativeNavigationEventArgs.cs" />
     <Compile Include="Services\NavigationService\INavigationService.cs" />
-    <Compile Include="Services\NavigationService\JournalEntry.cs" />
     <Compile Include="Services\NavigationService\NavigationServiceList.cs" />
     <Compile Include="Services\SerializationService\ISerializationService.cs" />
     <Compile Include="Services\SerializationService\JsonSerializationService.cs" />
@@ -220,10 +220,6 @@
     <Page Include="Controls\HamburgerMenu.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
-    </Page>
-    <Page Include="Styles\Mdl2.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
     </Page>
     <Page Include="Converters\Themes\Generic.xaml">
       <Generator>MSBuild:Compile</Generator>
